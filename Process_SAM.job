@@ -1,0 +1,64 @@
+#!/bin/sh
+
+#PBS -l mem=16gb,nodes=1:ppn=1,walltime=36:00:00 
+#PBS -m abe 
+#PBS -M konox006@umn.edu 
+#PBS -q lab
+
+#	The root of where we will work
+PROJECT_DIR=${HOME}/Projects/Deleterious_Mutations/Barley_Exomes
+#	The capture we are working with
+CAPTURE="KU-Missouri"
+#	And the sample
+SAMPLE="OUH602"
+#	The date of the alignment
+ALIGN_DATE="2013-09-26"
+#	The programs we are using
+SAMTOOLS=${HOME}/Soft/samtools-0.1.19/samtools
+PICARD_SORT=${HOME}/Soft/picard-tools-1.99/SortSam.jar
+ADDRG=${HOME}/Soft/picard-tools-1.99/AddOrReplaceReadGroups.jar
+MARKDUPS=${HOME}/Soft/picard-tools-1.99/MarkDuplicates.jar
+
+#	cd into the directory
+cd ${PROJECT_DIR}/${CAPTURE}/${SAMPLE}
+
+#	Use Samtools to trim out the reads we don't care about
+#	-f 3 gives us reads mapped in proper pair
+#	-F 256 excludes reads not in their primary alignments
+$SAMTOOLS view -f 3 -F 256 -bS ${SAMPLE}_${CAPTURE}_${ALIGN_DATE}.sam > ${SAMPLE}_${CAPTURE}_${ALIGN_DATE}_trimmed.bam
+
+#	Picard tools to sort and index
+java -Xmx15g -XX:MaxPermSize=10g -jar\
+	${PICARD_SORT} \
+	INPUT=${SAMPLE}_${CAPTURE}_${ALIGN_DATE}_trimmed.bam \
+	OUTPUT=${SAMPLE}_${CAPTURE}_${ALIGN_DATE}_Sorted.bam \
+	SORT_ORDER=coordinate \
+	CREATE_INDEX=true\
+	TMP_DIR=${HOME}/Scratch/Picard_Tmp
+
+#	Then remove duplicates
+java -Xmx15g -XX:MaxPermSize=10g -jar\
+	${MARKDUPS} \
+	INPUT=${SAMPLE}_${CAPTURE}_${ALIGN_DATE}_Sorted.bam \
+	OUTPUT=${SAMPLE}_${CAPTURE}_${ALIGN_DATE}_NoDups.bam \
+	METRICS_FILE=${SAMPLE}_${CAPTURE}_${ALIGN_DATE}_Metrics.txt\
+	REMOVE_DUPLICATES=true\
+	CREATE_INDEX=true\
+	TMP_DIR=${HOME}/Scratch/Picard_Tmp\
+	MAX_RECORDS_IN_RAM=50000
+
+#	Then add read groups
+java -Xmx15g -XX:MaxPermSize=10g -jar\
+	${ADDRG} \
+	INPUT=${SAMPLE}_${CAPTURE}_${ALIGN_DATE}_NoDups.bam \
+	OUTPUT=${SAMPLE}_${CAPTURE}_${ALIGN_DATE}_Finished.bam \
+	RGID=${SAMPLE}\
+	RGPL=Illumina\
+	RGPU=${SAMPLE}\
+	RGSM=${SAMPLE}\
+	RGLB=${CAPTURE}_${SAMPLE}\
+	TMP_DIR=${HOME}/Scratch/Picard_Tmp\
+	CREATE_INDEX=True
+
+#	Get rid of everything except the finihed BAM file
+#find . -type f -not -name '*Finished*' | xargs rm
