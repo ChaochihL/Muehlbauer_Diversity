@@ -1,2 +1,2 @@
 # Muehlbauer_Diversity
-Scripts for read mapping of Rasmusson samples.
+Scripts written by Tom Kono for read mapping of Rasmusson samples.
